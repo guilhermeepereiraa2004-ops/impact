@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#090b08">
+  <title>Agende seu cuidado | Impact Detail</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/app.css"><script src="assets/app-shared.js" defer></script><script src="assets/booking.js" defer></script>
+</head>
+<body class="booking-app">
+  <header class="app-header"><a class="app-brand" href="/" aria-label="Impact Detail, início">IMPACT<span>DETAIL</span></a><a class="back-site" href="/"><span data-icon="back"></span> Voltar ao site</a></header>
+  <main>
+    <section class="booking-heading"><div class="app-container"><p class="kicker">CUIDADO QUE COMEÇA AQUI</p><h1>Um horário para deixar<br>seu carro <em>em dia.</em></h1><p>Escolha o cuidado. Encontre um horário. Deixe o resto com a gente.</p><span class="heading-detail" aria-hidden="true">✦</span></div></section>
+    <div class="app-container booking-layout" id="booking-layout">
+      <div class="booking-content">
+        <nav class="stepper" aria-label="Etapas do agendamento"><ol><li class="active" aria-current="step"><span>01</span>Seu carro</li><li><span>02</span>Data e hora</li><li><span>03</span>Seus dados</li></ol></nav>
+        <div class="notice error" id="booking-error" role="alert" hidden></div>
+        <div id="loading-booking" class="empty-state">Carregando os cuidados disponíveis…</div>
+        <form id="booking-form" hidden novalidate>
+          <section class="booking-step" data-step="1" aria-labelledby="step-title-1">
+            <div class="form-section-heading"><span class="section-number">01 / SEU CARRO</span><h2 id="step-title-1" tabindex="-1">O que vamos cuidar hoje?</h2><p>Selecione o porte e os serviços para seu veículo.</p></div>
+            <fieldset class="category-field"><legend>Porte do veículo</legend><div class="category-options"><label><input type="radio" name="category" value="PM" checked><span><strong>P / M</strong><small>Hatches e sedãs<br>Corolla, Civic, Gol…</small></span></label><label><input type="radio" name="category" value="G"><span><strong>G</strong><small>SUVs e picapes<br>Compass, Hilux…</small></span></label><label><input type="radio" name="category" value="GG"><span><strong>GG</strong><small>Vans e extragrandes<br>Valores sob consulta</small></span></label></div></fieldset>
+            <fieldset><legend>Escolha seus serviços <span class="optional">Pode selecionar mais de um</span></legend><div class="service-options" id="service-options"></div></fieldset>
+            <p class="field-note">Os tempos são estimados para organizar a agenda. Valores e prazo de entrega serão validados pela equipe após a avaliação do veículo.</p>
+            <div class="step-actions"><span>Seu carro merece esse cuidado.</span><button class="primary-btn" type="button" id="to-date">Escolher um horário <span data-icon="arrow"></span></button></div>
+          </section>
+          <section class="booking-step" data-step="2" hidden aria-labelledby="step-title-2">
+            <div class="form-section-heading"><span class="section-number">02 / DATA E HORA</span><h2 id="step-title-2" tabindex="-1">Encontre seu melhor momento.</h2><p>Mostramos apenas horários disponíveis para os cuidados escolhidos.</p></div>
+            <div class="date-toolbar"><label class="field-label" for="booking-date">Data do atendimento<input type="date" id="booking-date" required></label><p class="field-note" id="hours-description"></p></div>
+            <div class="quick-dates" id="quick-dates" aria-label="Próximas datas"></div>
+            <fieldset class="slots-field"><legend>Horários disponíveis <span class="optional">Horário de Brasília</span></legend><div id="time-slots" class="time-slots" aria-live="polite"></div></fieldset>
+            <p class="field-note">O período do atendimento fica reservado enquanto a equipe analisa sua solicitação.</p>
+            <div class="step-actions"><button class="plain-btn" type="button" data-back="1"><span data-icon="back"></span> Voltar</button><button class="primary-btn" type="button" id="to-details">Continuar <span data-icon="arrow"></span></button></div>
+          </section>
+          <section class="booking-step" data-step="3" hidden aria-labelledby="step-title-3">
+            <div class="form-section-heading"><span class="section-number">03 / SEUS DADOS</span><h2 id="step-title-3" tabindex="-1">Estamos quase lá.</h2><p>Deixe seus dados para identificarmos o veículo e falarmos com você.</p></div>
+            <div class="form-grid">
+              <label class="field-label full">Seu nome<input name="name" autocomplete="name" minlength="3" maxlength="100" placeholder="Nome e sobrenome" required></label>
+              <label class="field-label">Telefone com DDD<input name="phone" type="tel" autocomplete="tel" maxlength="25" placeholder="(00) 00000-0000" required pattern="[0-9() +\-]{10,25}"></label>
+              <label class="field-label">E-mail <span class="optional">Opcional</span><input name="email" type="email" autocomplete="email" maxlength="150" placeholder="voce@email.com"></label>
+              <label class="field-label full">Marca e modelo do veículo<input name="vehicle" maxlength="100" minlength="2" placeholder="Ex.: Toyota Corolla prata" required></label>
+              <label class="field-label full">Algum detalhe que devemos saber? <span class="optional">Opcional</span><textarea name="notes" rows="3" maxlength="1000" placeholder="Manchas nos bancos, atenção à pintura, dúvidas…"></textarea></label>
+            </div>
+            <div class="notice subtle"><span data-icon="shield"></span><p>Sem pagamento agora. A equipe vai analisar a solicitação e entrar em contato para confirmar os detalhes do atendimento.</p></div>
+            <div class="step-actions"><button class="plain-btn" type="button" data-back="2"><span data-icon="back"></span> Voltar</button><button class="primary-btn" type="submit" id="submit-booking">Solicitar agendamento <span data-icon="check"></span></button></div>
+          </section>
+        </form>
+      </div>
+      <aside class="booking-summary" aria-label="Resumo do agendamento"><div class="summary-heading"><span data-icon="shine"></span><span>SEU PRÓXIMO CUIDADO</span></div><h2>Bom para o carro.<br>Melhor para você.</h2><div id="summary-services"><p class="summary-empty">Escolha os serviços e acompanhe os detalhes por aqui.</p></div><dl class="summary-details"><div><dt>Veículo</dt><dd id="summary-category">Pequeno / Médio</dd></div><div><dt>Tempo reservado</dt><dd id="summary-duration">—</dd></div><div><dt>Data e hora</dt><dd id="summary-date">A escolher</dd></div></dl><div class="summary-total"><span>Valor estimado</span><strong id="summary-total">—</strong></div><p class="summary-footnote" id="summary-footnote">Sem pagamento antecipado.<br>Cuidado em cada detalhe.</p><div class="summary-brand">IMPACT <span>DETAIL</span></div></aside>
+    </div>
+    <section class="booking-success app-container" id="booking-success" hidden aria-labelledby="success-title"><div class="success-icon" data-icon="check"></div><p class="kicker">SOLICITAÇÃO RECEBIDA</p><h1 id="success-title" tabindex="-1">Seu próximo cuidado<br>já tem um espaço na agenda.</h1><p>O pedido foi registrado e aguarda a confirmação da equipe. Guarde o protocolo abaixo para identificar seu atendimento.</p><div id="receipt" class="receipt"></div><div class="success-actions"><a class="outline-btn" href="/">Voltar ao site</a></div><a class="small-link" href="/agendar">Fazer outro agendamento</a></section>
+  </main>
+  <footer class="app-footer"><span>© 2026 Impact Detail</span><span>Limpeza. Brilho. Proteção.</span></footer>
+</body>
+</html>
