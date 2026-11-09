@@ -67,5 +67,14 @@ function createApp({ database = path.join(__dirname,'data','impact.sqlite'), clo
   server.on('close',()=>store.close());
   return {server,store};
 }
-if(require.main===module) { const demo=process.argv.includes('--demo');const {server}=createApp({demo});const port=Number(process.env.PORT)||5500;server.listen(port,'127.0.0.1',()=>console.log(`Impact Detail${demo?' — demonstração sem login':''}: http://127.0.0.1:${port}\nAgendamento: http://127.0.0.1:${port}/agendar\nAdmin: http://127.0.0.1:${port}/admin`)); }
+if (require.main === module) {
+  const demo = !process.argv.includes('--protected');
+  const { server } = createApp({ demo });
+  const port = Number(process.env.PORT) || 5500;
+
+  server.listen(port, '127.0.0.1', () => {
+    const base = `http://127.0.0.1:${port}`;
+    console.log(`Impact Detail${demo ? ' — demonstração sem login' : ''}: ${base}\nAgendamento: ${base}/agendar\nAdmin: ${base}/admin`);
+  });
+}
 module.exports={createApp};

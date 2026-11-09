@@ -5,8 +5,8 @@
   "description": "Site, agendamento e administração da Impact Detail",
   "engines": { "node": ">=24" },
   "scripts": {
-    "start": "node server.cjs --demo",
-    "start:protected": "node server.cjs",
+    "start": "node server.cjs",
+    "start:protected": "node server.cjs --protected",
     "test": "node --test tests/*.test.cjs",
     "check": "node scripts/check.cjs"
   }
