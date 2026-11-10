@@ -37,6 +37,23 @@ function createStore(filename, clock = () => new Date()) {
     CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, protocol TEXT UNIQUE NOT NULL, date TEXT NOT NULL, start INTEGER NOT NULL, end INTEGER NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL, created TEXT NOT NULL, updated TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS bookings_date ON bookings(date,start);
     CREATE TABLE IF NOT EXISTS blocks (id TEXT PRIMARY KEY, date TEXT NOT NULL, start INTEGER NOT NULL, end INTEGER NOT NULL, reason TEXT NOT NULL);
+    CREATE TABLE IF NOT EXISTS cash_receipts (
+      booking_id TEXT PRIMARY KEY REFERENCES bookings(id),
+      amount_cents INTEGER NOT NULL CHECK(amount_cents > 0),
+      date TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS cash_expenses (
+      id TEXT PRIMARY KEY,
+      description TEXT NOT NULL,
+      amount_cents INTEGER NOT NULL CHECK(amount_cents > 0),
+      date TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS cash_income (
+      id TEXT PRIMARY KEY,
+      description TEXT NOT NULL,
+      amount_cents INTEGER NOT NULL CHECK(amount_cents > 0),
+      date TEXT NOT NULL
+    );
   `);
   db.prepare('INSERT OR IGNORE INTO settings VALUES (1,?)').run(JSON.stringify(DEFAULT_SETTINGS));
   const settings = () => JSON.parse(db.prepare('SELECT value FROM settings WHERE id=1').get().value);
@@ -81,6 +98,70 @@ function createStore(filename, clock = () => new Date()) {
     return { date,slots,...quote,closed:!config.days.includes(new Date(date+'T12:00:00Z').getUTCDay()) };
   }
   const decode = row => row ? { ...JSON.parse(row.data),id:row.id,protocol:row.protocol,date:row.date,time:timeLabel(row.start),endTime:timeLabel(row.end),status:row.status,created:row.created,updated:row.updated } : null;
+  function validateCashMovement({ amountCents, date }) {
+    demand(Number.isSafeInteger(amountCents) && amountCents > 0 && amountCents <= 999999999, 'Informe um valor válido entre R$ 0,01 e R$ 9.999.999,99.');
+    demand(typeof date === 'string' && validDate(date) && date <= localDate(clock()), 'Informe uma data válida até hoje.');
+  }
+
+  function listCashFlow() {
+    const orders = db.prepare(`
+      SELECT bookings.*, cash_receipts.date AS received_date, cash_receipts.amount_cents AS received_cents
+      FROM bookings LEFT JOIN cash_receipts ON cash_receipts.booking_id = bookings.id
+      WHERE bookings.status != 'cancelled' OR cash_receipts.booking_id IS NOT NULL
+    `).all();
+    const entries = orders.map(row => {
+      const booking = decode(row);
+      return {
+        id: booking.id,
+        type: row.received_date ? 'received' : 'pending',
+        date: row.received_date ?? booking.date,
+        description: booking.services.map(service => service.name).join(' + '),
+        protocol: booking.protocol,
+        customer: booking.customer.name,
+        amountCents: row.received_cents ?? (booking.consultation ? null : Math.round(booking.total * 100)),
+      };
+    });
+    const manualEntries = db.prepare(`
+      SELECT id, 'expense' AS type, date, description, amount_cents AS amountCents FROM cash_expenses
+      UNION ALL
+      SELECT id, 'received' AS type, date, description, amount_cents AS amountCents FROM cash_income
+    `).all();
+    return [...entries, ...manualEntries].sort((first, second) => second.date.localeCompare(first.date) || first.id.localeCompare(second.id));
+  }
+
+  function recordCashReceipt(bookingId, movement) {
+    validateCashMovement(movement);
+    const { amountCents, date } = movement;
+    return transaction(() => {
+      const booking = db.prepare('SELECT status FROM bookings WHERE id=?').get(bookingId);
+      demand(booking, 'Agendamento não encontrado.', 404);
+      const existing = db.prepare('SELECT amount_cents, date FROM cash_receipts WHERE booking_id=?').get(bookingId);
+      if (existing) {
+        demand(existing.amount_cents === amountCents && existing.date === date, 'O recebimento deste pedido já foi registrado.', 409);
+        return;
+      }
+      demand(booking.status !== 'cancelled', 'O pedido foi cancelado.', 409);
+      db.prepare('INSERT INTO cash_receipts (booking_id, amount_cents, date) VALUES (?, ?, ?)').run(bookingId, amountCents, date);
+    });
+  }
+
+  function recordManualCashMovement(type, movement) {
+    validateCashMovement(movement);
+    const { id, amountCents, date } = movement;
+    const description = text(movement.description, 150);
+    demand(description, 'Informe a descrição do lançamento.');
+    demand(typeof id === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id), 'Identificador do lançamento inválido.');
+    const table = type === 'income' ? 'cash_income' : 'cash_expenses';
+    return transaction(() => {
+      const existing = db.prepare(`SELECT description, amount_cents, date FROM ${table} WHERE id=?`).get(id);
+      if (existing) {
+        demand(existing.description === description && existing.amount_cents === amountCents && existing.date === date, 'Este lançamento já foi registrado. Feche o formulário para lançar outro.', 409);
+        return;
+      }
+      db.prepare(`INSERT INTO ${table} (id, description, amount_cents, date) VALUES (?, ?, ?, ?)`).run(id, description, amountCents, date);
+    });
+  }
+
   function createBooking(body) {
     const customer = { name:text(body.name,100),phone:text(body.phone,25).replace(/\D/g,''),email:text(body.email,150).toLowerCase() };
     demand(customer.name.length >= 3,'Informe seu nome completo.');
@@ -143,6 +224,7 @@ function createStore(filename, clock = () => new Date()) {
   }
   return {
     db,settings,catalog,availability,createBooking,updateBooking,saveSettings,addBlock,setup,login,
+    listCashFlow, recordCashReceipt, recordManualCashMovement,
     setupRequired:()=>!db.prepare('SELECT id FROM admins').get(),
     authenticate:token=> typeof token==='string' && token.length===64 && Boolean(db.prepare('SELECT token FROM sessions WHERE token=? AND expires>?').get(tokenHash(token),clock().getTime())),
     logout:token=>db.prepare('DELETE FROM sessions WHERE token=?').run(tokenHash(token||'')),

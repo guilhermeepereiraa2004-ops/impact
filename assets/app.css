@@ -14,4 +14,41 @@
 @media(max-width:700px){input:not([type=radio]):not([type=checkbox]),select,textarea{font-size:16px!important}.agenda-filters>input[type=date]{flex:1;min-width:135px;max-width:100%}.agenda-filters>select{max-width:100%;min-width:150px}.search-box input{min-width:0}.weekday-options span{padding-block:11px}}
 .demo-banner{display:flex;align-items:center;gap:16px;background:#eaf1de;border:1px solid #d5e3c0;border-radius:6px;padding:12px 16px;margin-bottom:26px;color:#6a7f4d;font-size:10px}.demo-banner>strong{font-size:9px;letter-spacing:.03em;font-weight:500;color:#4f702b;white-space:nowrap}.demo-banner p{font-size:10px;line-height:1.8}
 .table-scroll{position:relative}
+
+.cash-stats .stat-card > strong {
+  font-size: clamp(18px, 2.2vw, 31px);
+  overflow-wrap: anywhere;
+}
+.cash-stats .stat-icon { top: 16px; }
+.cash-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cash-period {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+.cash-period .field-label { margin: 0; }
+.cash-period .plain-btn { min-height: 45px; }
+.cash-table td > strong { white-space: normal; overflow-wrap: anywhere; }
+.cash-table .cash-amount { white-space: nowrap; font-weight: 600; }
+.cash-table td:last-child, .cash-table th:last-child { text-align: right; }
+.cash-table .outline-btn { white-space: nowrap; }
+.cash-negative, .cash-stats .cash-negative { color: #a04828; }
+
+@media (max-width: 700px) {
+  .admin-sidebar nav { gap: 4px; }
+  .admin-sidebar .sidebar-link {
+    flex-direction: column;
+    gap: 5px;
+    padding: 10px 3px;
+    font-size: clamp(8px, 2.6vw, 10px);
+    text-align: center;
+  }
+  .cash-period { width: 100%; }
+  .cash-stats .stat-icon { display: none; }
+  .cash-table td:nth-child(3) { grid-column: 2; grid-row: 1; justify-self: end; }
+  .cash-table td:nth-child(4) { grid-column: 2; grid-row: 2; justify-self: end; }
+  .cash-table td:nth-child(5) { grid-column: 1 / -1; grid-row: 3; text-align: left; }
+  .cash-table td:empty { display: none; }
+}
 @media(max-width:700px){.demo-banner{align-items:flex-start;flex-direction:column;gap:4px;padding:12px 14px}.demo-banner p{font-size:9px}.demo-banner>strong{font-size:8px}}

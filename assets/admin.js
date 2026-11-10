@@ -3,12 +3,163 @@
   const statusNames={pending:'Aguardando confirmação',confirmed:'Confirmado',in_progress:'Em atendimento',completed:'Concluído',cancelled:'Cancelado'};
   let bookings=[],blocks=[],catalog=[],settings={},today='',range='today',view='agenda',setupRequired=false;
   const authScreen=document.querySelector('#auth-screen'),shell=document.querySelector('#admin-shell'),dialog=document.querySelector('#booking-dialog');
+  const cashDialog = document.querySelector('#cash-dialog');
+  const cashForm = document.querySelector('#cash-form');
+  const cashMonth = document.querySelector('#cash-month');
+  const cashList = document.querySelector('#cash-list');
+  const cashError = document.querySelector('#cash-error');
+  const cashMoney = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  const cashStatus = {
+    pending: { label: 'A receber', className: 'pending' },
+    received: { label: 'Recebido', className: 'confirmed' },
+    expense: { label: 'Saída', className: 'cancelled' },
+  };
+  const cashActions = {
+    income: { title: 'Nova entrada', confirm: 'Confirmar entrada', placeholder: 'Ex.: venda de produto', route: 'income', success: 'Entrada registrada.' },
+    expense: { title: 'Nova saída', confirm: 'Salvar saída', placeholder: 'Ex.: compra de produtos', route: 'expenses', success: 'Saída registrada.' },
+    receipt: { title: 'Registrar recebimento', confirm: 'Confirmar recebimento', success: 'Recebimento registrado.' },
+  };
+  let cashEntries = [];
+  let cashTarget;
+  let cashLoadId = 0;
   function notice(message,error=false) {const el=document.querySelector('#admin-notice');el.hidden=!message;el.textContent=message;el.className='notice '+(error?'error':'success');if(message)el.scrollIntoView({behavior:'smooth',block:'nearest'});}
   function authError(message){const el=document.querySelector('#auth-error');el.textContent=message;el.hidden=!message;}
   function authView(setup=false){setupRequired=setup;authScreen.hidden=false;shell.hidden=true;document.querySelector('#repeat-password-label').hidden=!setup;document.querySelector('#repeat-password').required=setup;document.querySelector('#auth-password').minLength=setup?10:1;document.querySelector('#auth-password').autocomplete=setup?'new-password':'current-password';document.querySelector('#auth-title').textContent=setup?'Seu primeiro acesso.':'Bem-vindo de volta.';document.querySelector('#auth-description').textContent=setup?'Crie o acesso administrativo para começar a organizar os atendimentos.':'Entre para acompanhar a agenda e cuidar da operação.';document.querySelector('#auth-submit').innerHTML=(setup?'Criar acesso e entrar':'Entrar no painel')+icon('arrow');document.querySelector('#auth-note').textContent=setup?'Escolha uma senha de pelo menos 10 caracteres. Guarde os dados de acesso.':'Acesso exclusivo da equipe Impact Detail.';}
-  async function guarded(task) {try{return await task();}catch(error){if(error.status===401){dialog.close();authView();authError('Sua sessão terminou. Entre novamente.');}else notice(error.message,true);}}
+  async function guarded(task) {try{return await task();}catch(error){if(error.status===401){document.querySelector('dialog[open]')?.close();authView();authError('Sua sessão terminou. Entre novamente.');}else notice(error.message,true);}}
   async function load(){const [data,config]=await Promise.all([api('/api/admin/bookings'),api('/api/catalog')]);bookings=data.bookings;blocks=data.blocks;catalog=config.services;settings=config.settings;today=config.today;renderAgenda();renderClients();renderBlocks();}
-  function switchView(next){view=next;document.querySelectorAll('.admin-view').forEach(el=>el.hidden=el.id!=='view-'+view);document.querySelectorAll('[data-view]').forEach(el=>el.classList.toggle('active',el.dataset.view===view));document.querySelector('#view-breadcrumb').textContent={agenda:'Agenda',clientes:'Clientes',configuracoes:'Configurações'}[view];if(view==='configuracoes')renderSettings();notice('');window.scrollTo({top:0,behavior:'smooth'});}
+  function switchView(next) {
+    view = next;
+    document.querySelectorAll('.admin-view').forEach(el => el.hidden = el.id !== 'view-' + view);
+    document.querySelectorAll('[data-view]').forEach(el => el.classList.toggle('active', el.dataset.view === view));
+    document.querySelector('#view-breadcrumb').textContent = { agenda: 'Agenda', clientes: 'Clientes', caixa: 'Fluxo de caixa', configuracoes: 'Configurações' }[view];
+    notice('');
+    if (view === 'configuracoes') renderSettings();
+    if (view === 'caixa') guarded(loadCashFlow);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function loadCashFlow() {
+    const loadId = ++cashLoadId;
+    const { entries } = await api('/api/admin/cash-flow');
+    if (loadId !== cashLoadId) return;
+    cashEntries = entries;
+    renderCashFlow();
+  }
+
+  function renderCashFlow() {
+    const month = cashMonth.value;
+    const entries = cashEntries.filter(entry => !month || entry.date.startsWith(month + '-'));
+    const totals = { pending: 0, received: 0, expense: 0 };
+    let unpriced = 0;
+    for (const entry of entries) {
+      totals[entry.type] += entry.amountCents ?? 0;
+      if (entry.amountCents === null) unpriced++;
+    }
+    const balance = totals.received - totals.expense;
+    const formatted = cents => cashMoney.format(cents / 100);
+    document.querySelector('#cash-pending').textContent = formatted(totals.pending);
+    document.querySelector('#cash-pending-note').textContent = unpriced ? `${unpriced} ${unpriced === 1 ? 'pedido com valor a definir' : 'pedidos com valor a definir'}` : 'Pedidos com valor definido';
+    document.querySelector('#cash-received').textContent = formatted(totals.received);
+    document.querySelector('#cash-expenses').textContent = formatted(totals.expense);
+    const balanceDisplay = document.querySelector('#cash-balance');
+    balanceDisplay.textContent = formatted(balance);
+    balanceDisplay.classList.toggle('cash-negative', balance < 0);
+    document.querySelector('#cash-count').textContent = `${entries.length} ${entries.length === 1 ? 'lançamento' : 'lançamentos'}`;
+    document.querySelector('#cash-clear-month').hidden = !month;
+
+    if (!entries.length) {
+      cashList.innerHTML = '<p class="empty-state">Nenhum lançamento neste período.</p>';
+      return;
+    }
+    const rows = entries.map(entry => {
+      const status = cashStatus[entry.type];
+      const amount = entry.amountCents === null ? 'Sob consulta' : formatted(entry.amountCents);
+      let source = '';
+      if (entry.protocol) source = `<small>${e(entry.protocol)} · ${e(entry.customer)}</small>`;
+      else if (entry.type === 'received') source = '<small>Entrada avulsa</small>';
+      const action = entry.type === 'pending'
+        ? `<button class="outline-btn small" type="button" data-receive="${e(entry.id)}" aria-label="Registrar recebimento do pedido ${e(entry.protocol)}">Registrar recebimento</button>` : '';
+      return `<tr>
+        <td>${formatDate(entry.date)}</td>
+        <td><strong>${e(entry.description)}</strong>${source}</td>
+        <td><span class="status ${status.className}">${status.label}</span></td>
+        <td class="cash-amount${entry.type === 'expense' ? ' cash-negative' : ''}">${amount}</td>
+        <td>${action}</td>
+      </tr>`;
+    }).join('');
+    cashList.innerHTML = `<div class="table-scroll"><table class="bookings-table cash-table">
+      <thead><tr><th>Data</th><th>Descrição</th><th>Status</th><th>Valor</th><th scope="col">Ação</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+  }
+
+  function openCashDialog(type, entry) {
+    const action = cashActions[type];
+    cashTarget = { id: entry?.id ?? crypto.randomUUID(), type };
+    cashForm.reset();
+    cashError.hidden = true;
+    cashForm.elements.description.disabled = Boolean(entry);
+    cashForm.elements.description.placeholder = action.placeholder ?? '';
+    document.querySelector('#cash-description-field').hidden = Boolean(entry);
+    document.querySelector('#cash-dialog-title').textContent = action.title;
+    document.querySelector('#cash-submit-label').textContent = action.confirm;
+    const orderLabel = document.querySelector('#cash-dialog-order');
+    orderLabel.hidden = !entry;
+    orderLabel.textContent = entry ? `${entry.protocol} · ${entry.customer}` : '';
+    cashForm.elements.date.max = today;
+    cashForm.elements.date.value = today;
+    if (entry && entry.amountCents !== null) cashForm.elements.amount.value = (entry.amountCents / 100).toFixed(2);
+    cashDialog.showModal();
+  }
+
+  document.querySelector('#new-cash-income').addEventListener('click', () => openCashDialog('income'));
+  document.querySelector('#new-cash-expense').addEventListener('click', () => openCashDialog('expense'));
+  cashMonth.addEventListener('change', renderCashFlow);
+  document.querySelector('#cash-clear-month').addEventListener('click', () => {
+    cashMonth.value = '';
+    renderCashFlow();
+    cashMonth.focus();
+  });
+  cashList.addEventListener('click', event => {
+    const button = event.target.closest('[data-receive]');
+    if (!button) return;
+    const entry = cashEntries.find(item => item.id === button.dataset.receive && item.type === 'pending');
+    if (entry) openCashDialog('receipt', entry);
+  });
+  const cashButtons = cashDialog.querySelectorAll('button');
+  const cashSubmit = cashForm.querySelector('[type="submit"]');
+  for (const id of ['close-cash-dialog', 'cancel-cash-dialog']) {
+    document.querySelector('#' + id).addEventListener('click', () => cashDialog.close());
+  }
+  cashDialog.addEventListener('cancel', event => {
+    if (cashSubmit.disabled) event.preventDefault();
+  });
+  cashForm.addEventListener('submit', event => {
+    event.preventDefault();
+    guarded(async () => {
+      const action = cashActions[cashTarget.type];
+      const receipt = cashTarget.type === 'receipt';
+      const { amount, date, description } = Object.fromEntries(new FormData(cashForm));
+      const body = { amountCents: Math.round(Number(amount) * 100), date };
+      if (!receipt) Object.assign(body, { id: cashTarget.id, description });
+      const route = receipt ? `receipts/${encodeURIComponent(cashTarget.id)}` : action.route;
+      cashButtons.forEach(button => button.disabled = true);
+      cashError.hidden = true;
+      try {
+        await api(`/api/admin/cash-flow/${route}`, { method: 'POST', body });
+      } catch (error) {
+        if (error.status === 401) throw error;
+        cashError.textContent = error.message;
+        cashError.hidden = false;
+        return;
+      } finally {
+        cashButtons.forEach(button => button.disabled = false);
+      }
+      cashDialog.close();
+      if (cashMonth.value) cashMonth.value = date.slice(0, 7);
+      await loadCashFlow();
+      notice(action.success);
+    });
+  });
   function filtered(){const selectedDate=document.querySelector('#filter-date').value;const status=document.querySelector('#filter-status').value;const query=document.querySelector('#search-bookings').value.toLowerCase().trim();return bookings.filter(b=>(selectedDate?b.date===selectedDate:range==='today'?b.date===today:range==='upcoming'?b.date>=today:true)&&(!status||b.status===status)&&(!query||[b.customer.name,b.customer.phone,b.vehicle,b.protocol].some(s=>s.toLowerCase().includes(query))));}
   function renderAgenda(){
     const list=filtered();const active=list.filter(b=>b.status!=='cancelled');
@@ -37,7 +188,18 @@
   document.querySelector('#blocks-list').addEventListener('click',event=>{const button=event.target.closest('[data-unblock]');if(button)guarded(async()=>{await api('/api/admin/blocks/'+button.dataset.unblock,{method:'DELETE',body:{}});await load();notice('Bloqueio removido.');});});
   document.querySelector('#password-form').addEventListener('submit',event=>{event.preventDefault();guarded(async()=>{await api('/api/admin/password',{method:'POST',body:Object.fromEntries(new FormData(event.target))});event.target.reset();authView();authError('Senha alterada. Entre com sua nova senha.');});});
   document.querySelector('#logout').addEventListener('click',()=>guarded(async()=>{await api('/api/logout',{method:'POST',body:{}});bookings=[];blocks=[];document.querySelector('#bookings-list').innerHTML='';document.querySelector('#clients-list').innerHTML='';authView();}));
-  document.querySelector('#refresh').addEventListener('click',()=>guarded(async()=>{await load();notice('Agenda atualizada.');}));
+  document.querySelector('#refresh').addEventListener('click', () => guarded(async () => {
+    if (view === 'caixa') {
+      await loadCashFlow();
+      notice('Fluxo de caixa atualizado.');
+      return;
+    }
+    await load();
+    notice('Agenda atualizada.');
+  }));
+  window.addEventListener('focus', () => {
+    if (view === 'caixa' && !shell.hidden && !cashDialog.open) guarded(loadCashFlow);
+  });
   document.querySelector('#export-csv').addEventListener('click',()=>{const safe=value=>'"'+String(value??'').replace(/^[=+@\-\t\r]/,"'$&").replace(/"/g,'""')+'"';const rows=[['Protocolo','Data','Hora','Cliente','Telefone','E-mail','Veículo','Porte','Serviços','Status','Estimativa','Sob consulta'],...filtered().map(b=>[b.protocol,b.date,b.time,b.customer.name,b.customer.phone,b.customer.email,b.vehicle,b.category,b.services.map(s=>s.name).join(', '),statusNames[b.status],b.total,b.consultation?'Sim':'Não'])];const url=URL.createObjectURL(new Blob(['\ufeff'+rows.map(row=>row.map(safe).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='impact-agenda-'+today+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
   enter().catch(error=>{document.querySelector('#admin-loading').hidden=true;authView();authError(error.message);});
 })();

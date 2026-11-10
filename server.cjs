@@ -46,6 +46,16 @@ function createApp({ database = path.join(__dirname,'data','impact.sqlite'), clo
         if(method==='POST' && route==='/api/login') {limit(req,'auth',10,900000);cookie(store.login(body.email,body.password));return send(200,{ok:true});}
         if(method==='POST' && route==='/api/logout') {store.logout(token);cookie('');return send(200,{ok:true});}
         if(method==='GET' && route==='/api/admin/bookings') return send(200,{bookings:store.listBookings(),blocks:store.listBlocks()});
+        if (method === 'GET' && route === '/api/admin/cash-flow') return send(200, { entries: store.listCashFlow() });
+        if (method === 'POST' && ['/api/admin/cash-flow/income', '/api/admin/cash-flow/expenses'].includes(route)) {
+          const type = route.endsWith('/income') ? 'income' : 'expense';
+          store.recordManualCashMovement(type, body);
+          return send(200, { ok: true });
+        }
+        if (method === 'POST' && /^\/api\/admin\/cash-flow\/receipts\/[\w-]+$/.test(route)) {
+          store.recordCashReceipt(route.split('/').pop(), body);
+          return send(200, { ok: true });
+        }
         if(method==='PATCH' && /^\/api\/admin\/bookings\/[\w-]+$/.test(route)) return send(200,store.updateBooking(route.split('/').pop(),body));
         if(method==='PUT' && route==='/api/admin/settings') return send(200,store.saveSettings(body));
         if(method==='POST' && route==='/api/admin/blocks') return send(201,store.addBlock(body));
